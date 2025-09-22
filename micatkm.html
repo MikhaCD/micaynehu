@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Flores Virtuales para Mica</title>
+  <style>
+    :root{
+      --bg1:#060606;
+      --yellow:#ffd400;
+      --petal:#ffea6a;
+      --center:#ffb400;
+      --soft: 18px;
+      --maxFlower: 320px;
+    }
+    html,body{height:100%;margin:0}
+    body{
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      background: radial-gradient(circle at 10% 10%, rgba(255,255,255,0.02) 0%, transparent 10%),
+                  radial-gradient(circle at 90% 90%, rgba(255,255,255,0.02) 0%, transparent 12%),
+                  linear-gradient(180deg, #0a0a0a 0%, #060606 50%, #030303 100%);
+      overflow:hidden;
+      color:var(--yellow);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    /* soft blur + vignette */
+    .bg-blur{
+      position:fixed;inset:0;pointer-events:none;
+      background-image: radial-gradient(ellipse at center, rgba(255,255,255,0.02), transparent 20%),
+                        radial-gradient(circle at 30% 20%, rgba(255,200,0,0.02), transparent 12%);
+      filter: blur(18px) saturate(1.05);
+      mix-blend-mode: overlay;
+    }
+    .vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 40%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.6) 100%)}
+
+    header{
+      position:fixed;left:50%;transform:translateX(-50%);top:36px;text-align:center;z-index:30;
+      text-shadow: 0 6px 24px rgba(0,0,0,0.75);
+    }
+    h1{
+      margin:0;padding:0;font-weight:700;font-size:clamp(20px,4.2vw,36px);
+      color:var(--yellow);
+      letter-spacing:0.4px;
+      background: linear-gradient(90deg, var(--yellow), #ffe77a 60%);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+
+    /* container holds flowers */
+    .garden{
+      position:relative;width:100%;height:100vh;overflow:hidden;display:block;
+    }
+
+    /* flower styles — we will create SVG flowers with a class */
+    .flower{
+      position:absolute;will-change:transform,opacity;transform-origin:center center;filter:drop-shadow(0 20px 40px rgba(0,0,0,0.55));
+    }
+
+    /* gentle floating animation via CSS fallback */
+    @keyframes floatY{
+      0%{transform:translateY(0) rotate(0deg)}
+      50%{transform:translateY(-24px) rotate(6deg)}
+      100%{transform:translateY(0) rotate(0deg)}
+    }
+
+    /* subtle scale pulse */
+    @keyframes pulse{
+      0%{transform:scale(1)}
+      50%{transform:scale(1.02)}
+      100%{transform:scale(1)}
+    }
+
+    footer.note{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;color:rgba(255,255,255,0.2);font-size:12px}
+
+    /* responsive: hide some extras on tiny screens */
+    @media (max-width:520px){
+      .flower.small{display:none}
+      h1{font-size:18px}
+    }
+	
+	/* Botón de música mejorado */
+	  #botonMusica {
+		background: linear-gradient(145deg, #66a6ff, #89f7fe);
+		color: #fff;
+		border: none;
+		border-radius: 50%;
+		width: 80px;
+		height: 80px;
+		font-size: 2rem;
+		cursor: pointer;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		position: initial;
+		transition: all 0.2s ease;
+		box-shadow: 0 5px 20px rgba(0,0,0,0.3), 0 0 15px rgba(102,166,255,0.5);
+	  }
+
+	  #botonMusica:hover {
+		transform: scale(1.1);
+		box-shadow: 0 8px 25px rgba(0,0,0,0.4), 0 0 25px rgba(102,166,255,0.7);
+	  }
+
+	  /* Animación de pulsación cuando la música está sonando */
+	  #botonMusica.playing {
+		animation: pulse 1.2s infinite;
+	  }
+
+	  @keyframes pulse {
+		0% { box-shadow: 0 0 15px rgba(102,166,255,0.5); }
+		50% { box-shadow: 0 0 25px rgba(102,166,255,0.8); }
+		100% { box-shadow: 0 0 15px rgba(102,166,255,0.5); }
+	  }
+
+	  /* Adaptación para móviles */
+	  @media (max-width: 600px) {
+		#botonMusica {
+		  width: 60px;
+		  height: 60px;
+		  font-size: 1.5rem;
+		  margin: 35px 0 0 20px;
+		}
+	  }
+	@media (max-width: 480px) {
+	  .flower {
+		/* opcional: reducir aún más escala general */
+		transform: scale(0.8) !important;
+	  }
+	}
+  </style>
+</head>
+<body>
+  <div class="bg-blur"></div>
+  <div class="vignette"></div>
+
+  <header>
+    <h1>Mica te quiero muchisimo, se que no es lo mismo que dartelas en persona, pero acá están tus flores amarillas virtuales &lt;3</h1>
+  </header>
+	<button id="botonMusica">
+	  <img id="iconoMusica" src="play.png" alt="Reproducir" width="30">
+	</button>
+  <main class="garden" id="garden" aria-hidden="false">
+    <!-- Flowers will be injected by JavaScript -->
+  </main>
+
+  <footer class="note">Hecho con cariño ✿</footer>
+
+  <script>
+    // CONFIG
+    const NUM_FLOWERS = 11; // cuántas flores grandes
+    const SIZES = [220, 260, 300, 180, 240, 280];
+    const garden = document.getElementById('garden');
+	
+	function getScaledSize(originalSize){
+	  const screenWidth = window.innerWidth;
+	  if(screenWidth <= 480){ // celular pequeño
+		return originalSize * 0.5;
+	  } else if(screenWidth <= 768){ // tablet pequeña
+		return originalSize * 0.75;
+	  }
+	  return originalSize; // escritorio
+	}
+
+    // SVG template for a simple stylized flower
+    // SVG template for a simple stylized flower
+	function createFlowerSVG(size){
+	  const ns = 'http://www.w3.org/2000/svg';
+	  const svg = document.createElementNS(ns,'svg');
+	  svg.setAttribute('width', size);
+	  svg.setAttribute('height', size * 1.8); // más alto para tallo + hojas
+	  svg.setAttribute('viewBox', '0 0 200 360');
+	  svg.setAttribute('class','flower-svg');
+
+	  // --- Definiciones de gradientes ---
+	  const defs = document.createElementNS(ns,'defs');
+
+	  // pétalos
+	  const petalGrad = document.createElementNS(ns,'radialGradient');
+	  petalGrad.setAttribute('id','petalGrad');
+	  petalGrad.setAttribute('cx','35%');
+	  petalGrad.setAttribute('cy','35%');
+	  const pg1 = document.createElementNS(ns,'stop'); pg1.setAttribute('offset','0%'); pg1.setAttribute('stop-color','#fff6b0');
+	  const pg2 = document.createElementNS(ns,'stop'); pg2.setAttribute('offset','100%'); pg2.setAttribute('stop-color','#ffd400');
+	  petalGrad.appendChild(pg1); petalGrad.appendChild(pg2);
+
+	  // centro
+	  const centerGrad = document.createElementNS(ns,'radialGradient');
+	  centerGrad.setAttribute('id','centerGrad');
+	  centerGrad.setAttribute('cx','30%');
+	  centerGrad.setAttribute('cy','30%');
+	  const cg1 = document.createElementNS(ns,'stop'); cg1.setAttribute('offset','0%'); cg1.setAttribute('stop-color','#ffd9a3');
+	  const cg2 = document.createElementNS(ns,'stop'); cg2.setAttribute('offset','100%'); cg2.setAttribute('stop-color','#ff9e00');
+	  centerGrad.appendChild(cg1); centerGrad.appendChild(cg2);
+
+	  // tallo
+	  const stemGrad = document.createElementNS(ns,'linearGradient');
+	  stemGrad.setAttribute('id','stemGrad');
+	  stemGrad.setAttribute('x1','0%'); stemGrad.setAttribute('y1','0%');
+	  stemGrad.setAttribute('x2','0%'); stemGrad.setAttribute('y2','100%');
+	  const sg1 = document.createElementNS(ns,'stop'); sg1.setAttribute('offset','0%'); sg1.setAttribute('stop-color','#4dbf63');
+	  const sg2 = document.createElementNS(ns,'stop'); sg2.setAttribute('offset','50%'); sg2.setAttribute('stop-color','#2d914a');
+	  const sg3 = document.createElementNS(ns,'stop'); sg3.setAttribute('offset','100%'); sg3.setAttribute('stop-color','#1d5e31');
+	  stemGrad.appendChild(sg1); stemGrad.appendChild(sg2); stemGrad.appendChild(sg3);
+
+	  // hoja
+	  const leafGrad = document.createElementNS(ns,'linearGradient');
+	  leafGrad.setAttribute('id','leafGrad');
+	  leafGrad.setAttribute('x1','0%'); leafGrad.setAttribute('y1','0%');
+	  leafGrad.setAttribute('x2','100%'); leafGrad.setAttribute('y2','100%');
+	  const lg1 = document.createElementNS(ns,'stop'); lg1.setAttribute('offset','0%'); lg1.setAttribute('stop-color','#6fd98d');
+	  const lg2 = document.createElementNS(ns,'stop'); lg2.setAttribute('offset','100%'); lg2.setAttribute('stop-color','#2a7a46');
+	  leafGrad.appendChild(lg1); leafGrad.appendChild(lg2);
+
+	  defs.appendChild(petalGrad);
+	  defs.appendChild(centerGrad);
+	  defs.appendChild(stemGrad);
+	  defs.appendChild(leafGrad);
+	  svg.appendChild(defs);
+
+	  // --- Grupo principal ---
+	  const g = document.createElementNS(ns,'g');
+	  g.setAttribute('transform','translate(100 100)');
+
+	  // tallo curvo
+	  const stem = document.createElementNS(ns,'path');
+	  stem.setAttribute('d','M0,30 C -8,120 8,200 0,260'); // curva suave
+	  stem.setAttribute('stroke','url(#stemGrad)');
+	  stem.setAttribute('stroke-width','12');
+	  stem.setAttribute('stroke-linecap','round');
+	  stem.setAttribute('fill','none');
+	  g.appendChild(stem);
+
+	  // hojas (dos opuestas, con nervadura)
+	  function makeLeaf(xFlip, yOffset){
+		const leaf = document.createElementNS(ns,'path');
+		leaf.setAttribute('d','M0,0 C40,-30 60,20 0,50 C-60,20 -40,-30 0,0 Z');
+		leaf.setAttribute('fill','url(#leafGrad)');
+		leaf.setAttribute('transform',`scale(${xFlip},1) translate(10,${yOffset}) rotate(${xFlip===1?20:-20})`);
+		g.appendChild(leaf);
+
+		// nervadura central
+		const vein = document.createElementNS(ns,'path');
+		vein.setAttribute('d','M0,0 C0,15 0,35 0,50');
+		vein.setAttribute('stroke','rgba(255,255,255,0.3)');
+		vein.setAttribute('stroke-width','1.5');
+		vein.setAttribute('fill','none');
+		vein.setAttribute('transform',`scale(${xFlip},1) translate(10,${yOffset}) rotate(${xFlip===1?20:-20})`);
+		g.appendChild(vein);
+	  }
+	  makeLeaf(.8,100);  // hoja derecha
+	  makeLeaf(-.8,160); // hoja izquierda
+
+	  // pétalos
+	  for(let i=0;i<8;i++){
+		const petal = document.createElementNS(ns,'ellipse');
+		petal.setAttribute('cx', 48);
+		petal.setAttribute('cy', 0);
+		petal.setAttribute('rx', 40);
+		petal.setAttribute('ry', 18);
+		petal.setAttribute('transform', `rotate(${45*i})`);
+		petal.setAttribute('fill', 'url(#petalGrad)');
+		petal.setAttribute('stroke','rgba(0,0,0,0.06)');
+		petal.setAttribute('stroke-width','1');
+		g.appendChild(petal);
+	  }
+
+	  // centro
+	  const center = document.createElementNS(ns,'circle');
+	  center.setAttribute('r',26);
+	  center.setAttribute('fill','url(#centerGrad)');
+	  center.setAttribute('stroke','rgba(0,0,0,0.12)');
+	  center.setAttribute('stroke-width','1.5');
+	  g.appendChild(center);
+
+	  // puntitos decorativos
+	  for(let i=0;i<6;i++){
+		const d = document.createElementNS(ns,'circle');
+		const ang = Math.random()*Math.PI*2;
+		const rr = 6 + Math.random()*10;
+		d.setAttribute('cx', Math.cos(ang)*rr);
+		d.setAttribute('cy', Math.sin(ang)*rr);
+		d.setAttribute('r', 2+Math.random()*1.5);
+		d.setAttribute('fill','rgba(0,0,0,0.08)');
+		g.appendChild(d);
+	  }
+
+	  svg.appendChild(g);
+	  return svg;
+	}
+
+
+    // create flower element wrapper
+    function makeFlower(i){
+      const size = getScaledSize(SIZES[i % SIZES.length] || 240);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flower';
+      wrapper.style.width = size + 'px';
+      wrapper.style.height = size + 'px';
+      wrapper.style.left = Math.random()*110 + '%'; // allow overflow a bit
+      wrapper.style.top = (30 + Math.random()*60) + '%';
+      wrapper.style.opacity = 0.9 - Math.random()*0.25;
+      wrapper.style.transform = `translate(-50%,-50%) scale(${0.9 + Math.random()*0.3})`;
+
+      // append SVG
+      const svg = createFlowerSVG(size);
+      wrapper.appendChild(svg);
+
+      // store movement params
+      wrapper._float = {
+        speed: 0.25 + Math.random()*0.6,
+        amplitude: 18 + Math.random()*28,
+        phase: Math.random()*Math.PI*2,
+        rotate: (Math.random()*20-10),
+        baseX: parseFloat(wrapper.style.left),
+        baseY: parseFloat(wrapper.style.top),
+      };
+
+      // small CSS fallback animation to ensure motion without JS
+      wrapper.style.animation = `floatY ${8 + Math.random()*8}s ease-in-out ${Math.random()*2}s infinite`;
+
+      return wrapper;
+    }
+
+    // populate garden
+    const flowers = [];
+    for(let i=0;i<NUM_FLOWERS;i++){
+      const f = makeFlower(i);
+      garden.appendChild(f);
+      flowers.push(f);
+    }
+
+    // ANIMATION LOOP using requestAnimationFrame
+    let t0 = performance.now();
+    function animate(now){
+      const dt = (now - t0)/1000; t0 = now;
+      const time = now/1000;
+      flowers.forEach((f,idx)=>{
+        const p = f._float;
+        const vy = Math.sin(time * p.speed + p.phase) * p.amplitude;
+        const vx = Math.cos(time * (p.speed*0.6) + p.phase*0.7) * (p.amplitude*0.35);
+        const left = p.baseX + vx/6; // small horizontal drift
+        const top = p.baseY - vy/6; // vertical
+        const rot = Math.sin(time * p.speed + p.phase) * p.rotate;
+        f.style.left = (left) + '%';
+        f.style.top = (top) + '%';
+        f.style.transform = `translate(-50%,-50%) rotate(${rot}deg) scale(${0.95 + 0.07*Math.sin(time*1.2 + idx)})`;
+      });
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+
+    // subtle parallax with mouse
+    let mx=0,my=0;
+    window.addEventListener('mousemove', (e)=>{
+      const cx = window.innerWidth/2; const cy = window.innerHeight/2;
+      mx = (e.clientX - cx)/cx; my = (e.clientY - cy)/cy;
+      flowers.forEach((f,i)=>{
+        const depth = (i%3)/3 + 0.3;
+        const rx = mx * 6 * depth; const ry = my * -10 * depth;
+        f.style.transform += ` translate(${rx}px, ${ry}px)`;
+      });
+    });
+
+    // touch support: gentle sway on tap
+    window.addEventListener('touchstart', (e)=>{
+      flowers.forEach((f)=>{
+        f.style.transition = 'transform 0.6s cubic-bezier(.2,.9,.3,1)';
+        f.style.transform += ' scale(1.03)';
+        setTimeout(()=>{ f.style.transition=''; },650);
+      });
+    });
+
+    // accessibility: allow keyboard to focus and press to pulse
+    garden.tabIndex = -1;
+    garden.addEventListener('keydown',(ev)=>{
+      if(ev.key === ' ' || ev.key === 'Enter'){
+        flowers.forEach((f)=>{ f.style.transition='transform .5s'; f.style.transform += ' scale(1.04)'; setTimeout(()=>{f.style.transition='';},520); });
+      }
+    });
+
+  </script>
+  <script>
+	  const musica = new Audio('ColdPlay-Yellow.mp3'); // Música empieza pausada
+	  musica.loop = true;
+
+	  const boton = document.getElementById('botonMusica');
+	  const icono = document.getElementById('iconoMusica');
+
+	  boton.addEventListener('click', () => {
+		if (musica.paused) {
+		  musica.play();
+		  icono.src = 'pausa.png'; // Cambia a icono de pausa
+		  icono.alt = 'Pausar';
+		} else {
+		  musica.pause();
+		  icono.src = 'play.png'; // Cambia a icono de play
+		  icono.alt = 'Reproducir';
+		}
+	  });
+	</script>
+
+</body>
+</html>
